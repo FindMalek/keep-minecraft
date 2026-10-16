@@ -3,7 +3,8 @@
 A small story-driven Minecraft server for a group of friends who play after work: a vanilla world with a story on
 top, a one-click client pack, and a companion site where everyone follows the story, plans events and sees the map.
 
-Built for [the keep](https://github.com/FindMalek) homelab, Minecraft Java 26.3 on Fabric.
+Live at **[mc.findmalek.engineer](https://mc.findmalek.engineer)** (the join guide is public; the rest needs a sign-in
+with a whitelisted Minecraft account). Built for the keep homelab, Minecraft Java 26.3 on Fabric.
 
 ## What's in here
 
