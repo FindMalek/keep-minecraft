@@ -249,9 +249,12 @@ const server = Bun.serve({
       }),
     },
     "/api/admin/chapter": {
-      POST: admin(async () => {
+      POST: admin(async (request) => {
         // Opens the next chapter now, finished or not (the Friday timer waits for the current one).
+        const body = (await request.json().catch(() => null)) as { from?: unknown } | null;
         const current = parseScore(await rcon.command("scoreboard players get #chapter keep").catch(() => "")) ?? 0;
+        // The page says which chapter it saw, so a repeated request can't skip one.
+        if (typeof body?.from === "number" && body.from !== current) return error(`it's already chapter ${current}`, 409);
         if (current < 1 || current >= 7) return error(current ? "that was the last chapter" : "the server is asleep, start it first", 400);
         const reply = await rcon.command(`function the_keep:open_chapter {n:${current + 1}}`).catch(() => null);
         live = null;

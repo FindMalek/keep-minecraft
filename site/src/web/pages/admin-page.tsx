@@ -92,26 +92,37 @@ function Console({ disabled }: { disabled: boolean }) {
   );
 }
 
-function Dashboard({ onSignOut }: { onSignOut: () => void }) {
+function Dashboard({ onSignOut, onExpired }: { onSignOut: () => void; onExpired: () => void }) {
   const [data, setData] = useState<AdminOverview | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  // A failed call may mean the 7-day session ended: re-check, which shows the login again if so.
+  const failed = useCallback(
+    (e: Error) => {
+      toast.error(e.message);
+      onExpired();
+    },
+    [onExpired],
+  );
   const load = useCallback(() => {
-    post<AdminOverview>("/api/admin/overview").then(setData, (e: Error) => toast.error(e.message));
-  }, []);
+    post<AdminOverview>("/api/admin/overview").then(setData, failed);
+  }, [failed]);
   useEffect(() => {
     load();
     const timer = setInterval(load, 10_000);
     return () => clearInterval(timer);
   }, [load]);
 
+  // One action at a time: a double click must not restart twice or open two chapters.
   const act = (path: string, body: unknown, done: string): void => {
-    post<{ reply?: string }>(path, body).then(
-      (result) => {
+    if (busy) return;
+    setBusy(true);
+    post<{ reply?: string }>(path, body)
+      .then((result) => {
         toast(result.reply || done);
         setTimeout(load, 1500);
-      },
-      (e: Error) => toast.error(e.message),
-    );
+      }, failed)
+      .finally(() => setBusy(false));
   };
   const addPlayer = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -142,13 +153,17 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
               : "stopped. starting takes about a minute."}
           </p>
           <div className="flex flex-wrap gap-2">
-            {!up && <Button onClick={() => act("/api/admin/server", { action: "start" }, "starting")}>start</Button>}
+            {!up && (
+              <Button disabled={busy} onClick={() => act("/api/admin/server", { action: "start" }, "starting")}>
+                start
+              </Button>
+            )}
             {up && (
               <>
-                <Button variant="outline" onClick={() => act("/api/admin/server", { action: "restart" }, "restarting")}>
+                <Button variant="outline" disabled={busy} onClick={() => act("/api/admin/server", { action: "restart" }, "restarting")}>
                   restart
                 </Button>
-                <Button variant="destructive" onClick={() => act("/api/admin/server", { action: "stop" }, "stopping")}>
+                <Button variant="destructive" disabled={busy} onClick={() => act("/api/admin/server", { action: "stop" }, "stopping")}>
                   stop
                 </Button>
               </>
@@ -162,7 +177,11 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             now.
           </p>
           <div>
-            <Button variant="outline" disabled={!up} onClick={() => act("/api/admin/chapter", {}, "next chapter open")}>
+            <Button
+              variant="outline"
+              disabled={!up || busy}
+              onClick={() => act("/api/admin/chapter", { from: data.chapter }, "next chapter open")}
+            >
               open the next chapter now
             </Button>
           </div>
@@ -250,7 +269,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           <button
             type="button"
             className="underline-offset-4 hover:underline"
-            onClick={() => post<string[]>("/api/admin/logs").then(setLogs)}
+            onClick={() => post<string[]>("/api/admin/logs").then(setLogs, failed)}
           >
             {logs.length ? "refresh" : "show"}
           </button>
@@ -325,5 +344,5 @@ export function AdminPage() {
   if (!state) return null;
   if (!state.enabled) return <p className="text-muted-foreground">the admin account isn't set up on this server.</p>;
   if (!state.admin) return <Login onDone={check} />;
-  return <Dashboard onSignOut={() => void post("/api/admin/logout").then(check)} />;
+  return <Dashboard onSignOut={() => void post("/api/admin/logout").then(check)} onExpired={check} />;
 }
