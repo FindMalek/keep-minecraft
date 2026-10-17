@@ -6,6 +6,7 @@ import type { Me, PublicInfo, State } from "../shared/types";
 import { PlayerHead } from "./components/player-head";
 import { api, usePoll } from "./lib/api";
 import { navigate, usePath } from "./lib/router";
+import { AdminPage } from "./pages/admin-page";
 import { EventsPage } from "./pages/events-page";
 import { HomePage } from "./pages/home-page";
 import { JoinPage } from "./pages/join-page";
@@ -64,6 +65,23 @@ export function App() {
   const signOut = (): void => {
     void api("/api/logout", { method: "POST" }).then(() => setMe(null));
   };
+
+  if (path === "/admin") {
+    return (
+      <div className="flex min-h-dvh flex-col">
+        <header className="flex h-11 items-center gap-4 border-b px-4">
+          <a href="/" className="inline-flex items-center gap-2 font-medium">
+            <span aria-hidden className="h-3.5 w-2.5 bg-foreground" />
+            {info?.title ?? "the keep"}
+          </a>
+          <ServerStatus info={info} waking={false} />
+        </header>
+        <main className="mx-auto w-full max-w-5xl px-4 pt-8 pb-16">
+          <AdminPage />
+        </main>
+      </div>
+    );
+  }
 
   const page = me ? path : "/join";
   const shown = me ? NAV : NAV.filter((item) => item.path === "/join");

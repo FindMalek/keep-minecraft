@@ -95,3 +95,12 @@ export interface PublicInfo {
   server: { up: boolean; online: number; max: number };
   packUrl: string | null;
 }
+
+export interface AdminOverview {
+  server: { up: boolean; online: string[]; max: number };
+  chapter: number | null;
+  pages: number | null;
+  whitelist: { name: string; uuid: string; op: boolean }[];
+  backups: { name: string; bytes: number; at: number }[];
+  events: GameEvent[];
+}

@@ -21,6 +21,8 @@ with a whitelisted Minecraft account). Built for the keep homelab, Minecraft Jav
   - The story so far (only what the group has reached), quests with who did what, events with "i'm in", player
     stats, who's online, the live [BlueMap](https://bluemap.bluecolored.de) map, and the join guide with the pack.
   - The server can sleep when nobody's on; signed-in players wake it from the site.
+  - `/admin` for the owner, behind its own username and password: start, stop, restart, whitelist and ops, kick, a
+    console, the server log, backups, open the next chapter early, delete any event.
 
 ## Use it
 
@@ -46,13 +48,18 @@ not just `/reload`.
 | `MAP_URL` | BlueMap's web server, proxied at `/bluemap/` for signed-in players |
 | `SITE_DATA` | writable: sessions and events (SQLite), the pack, wake requests |
 | `SERVER_ADDRESS`, `MC_VERSION`, `PACK_FILE` | shown on the join page |
+| `ADMIN_USER`, `ADMIN_PASSWORD_HASH_B64` | the `/admin` login: a `Bun.password.hash` of the password, base64 encoded |
+| `BACKUPS_DIR` | where the backups are (read-only), listed on `/admin` |
 
-Waking writes `SITE_DATA/wake/request`; something on the host has to start the server when that file appears (the
-keep uses a systemd path unit). The site never talks to Docker.
+Waking writes `SITE_DATA/wake/request` (and the admin's restart `SITE_DATA/wake/restart`); something on the host has
+to start or restart the server when those files appear (the keep uses a systemd path unit). The site never talks to
+Docker.
 
 ## Security
 
 - Every page but the join guide needs a sign-in; the map is proxied behind it too.
+- `/admin` has its own account: the password is only stored as an argon2 hash, sessions last 7 days
+  (SameSite=Strict), and an address gets locked out for 15 minutes after 10 wrong tries.
 - RCON only ever gets fixed commands with names checked against `whitelist.json` and `^[A-Za-z0-9_]{3,16}$`.
 - Changes need a custom header (no cross-site forms), sessions are HttpOnly + Secure cookies, sign-in codes expire
   after 5 minutes and new codes are rate limited per address.
