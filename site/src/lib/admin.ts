@@ -26,17 +26,31 @@ export class AdminAuth {
   }
 
   locked(address: string): boolean {
-    const recent = (this.failures.get(address) ?? []).filter((at) => Date.now() - at < LOCK_MS);
-    this.failures.set(address, recent);
-    return recent.length >= LOCK_AFTER;
+    return this.recent(address).length >= LOCK_AFTER;
   }
 
-  /** Checks the login; a wrong one counts towards a 15-minute lock for that address. */
+  private recent(address: string): number[] {
+    const recent = (this.failures.get(address) ?? []).filter((at) => Date.now() - at < LOCK_MS);
+    if (recent.length) this.failures.set(address, recent);
+    else this.failures.delete(address);
+    return recent;
+  }
+
+  /**
+   * Checks the login; a wrong one counts towards a 15-minute lock for that address. The attempt is counted before the
+   * (slow) hash check, so parallel guesses can't all slip past the lock, and taken back if it was right.
+   */
   async verify(address: string, user: string, password: string): Promise<boolean> {
     if (!this.user || !this.hash || this.locked(address)) return false;
-    const ok = (await Bun.password.verify(password, this.hash).catch(() => false)) && user === this.user;
-    // locked() above made sure there's a list for this address.
-    if (!ok) this.failures.get(address)?.push(Date.now());
+    const attempt = Date.now();
+    this.failures.set(address, [...this.recent(address), attempt]);
+    const hashOk = await Bun.password.verify(password, this.hash).catch(() => false);
+    const ok = hashOk && user === this.user;
+    if (ok) {
+      const left = (this.failures.get(address) ?? []).filter((at) => at !== attempt);
+      if (left.length) this.failures.set(address, left);
+      else this.failures.delete(address);
+    }
     return ok;
   }
 }

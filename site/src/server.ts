@@ -253,9 +253,9 @@ const server = Bun.serve({
         // Opens the next chapter now, finished or not (the Friday timer waits for the current one).
         const current = parseScore(await rcon.command("scoreboard players get #chapter keep").catch(() => "")) ?? 0;
         if (current < 1 || current >= 7) return error(current ? "that was the last chapter" : "the server is asleep, start it first", 400);
-        const reply = await rcon.command(`function the_keep:open_chapter {n:${current + 1}}`);
+        const reply = await rcon.command(`function the_keep:open_chapter {n:${current + 1}}`).catch(() => null);
         live = null;
-        return json({ reply, chapter: current + 1 });
+        return reply === null ? error("the server is asleep, start it first", 503) : json({ reply, chapter: current + 1 });
       }),
     },
     "/api/admin/events/:id": {
