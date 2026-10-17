@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import type { GameEvent, Me } from "../shared/types";
 
 const SESSION_DAYS = 60;
+const ADMIN_SESSION_DAYS = 7;
 
 export class Store {
   private db: Database;
@@ -15,6 +16,7 @@ export class Store {
         id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
         starts_at INTEGER NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS admin_sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS going (event_id INTEGER NOT NULL, name TEXT NOT NULL, PRIMARY KEY (event_id, name));
     `);
   }
@@ -34,6 +36,21 @@ export class Store {
 
   deleteSession(token: string): void {
     this.db.run("DELETE FROM sessions WHERE token = ? OR expires < ?", [token, Date.now()]);
+  }
+
+  createAdminSession(): string {
+    const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+    this.db.run("DELETE FROM admin_sessions WHERE expires < ?", [Date.now()]);
+    this.db.run("INSERT INTO admin_sessions VALUES (?, ?)", [token, Date.now() + ADMIN_SESSION_DAYS * 864e5]);
+    return token;
+  }
+
+  isAdmin(token: string): boolean {
+    return Boolean(this.db.query("SELECT 1 FROM admin_sessions WHERE token = ? AND expires > ?").get(token, Date.now()));
+  }
+
+  deleteAdminSession(token: string): void {
+    this.db.run("DELETE FROM admin_sessions WHERE token = ?", [token]);
   }
 
   /** Upcoming events, plus anything from the last day so tonight's event doesn't vanish once it starts. */
@@ -66,9 +83,12 @@ export class Store {
     return Number(result.lastInsertRowid);
   }
 
-  /** Only whoever created an event can delete it. */
-  deleteEvent(id: number, by: string): boolean {
-    const result = this.db.run("DELETE FROM events WHERE id = ? AND created_by = ?", [id, by]);
+  /** Only whoever created an event can delete it; `by` null is the admin, who can delete any. */
+  deleteEvent(id: number, by: string | null): boolean {
+    const result =
+      by === null
+        ? this.db.run("DELETE FROM events WHERE id = ?", [id])
+        : this.db.run("DELETE FROM events WHERE id = ? AND created_by = ?", [id, by]);
     if (result.changes) this.db.run("DELETE FROM going WHERE event_id = ?", [id]);
     return result.changes > 0;
   }
